@@ -1,4 +1,4 @@
-To run this project, run the below commands:
+To run this project, execute the below commands:
 
 1) terraform init
 2) terraform validate
