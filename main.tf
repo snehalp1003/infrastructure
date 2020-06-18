@@ -1,7 +1,8 @@
 provider "aws" {
-  region = "us-east-1"
+  region = var.region
 }
 
+# Creating VPC
 resource "aws_vpc" "csye6225_a4_vpc" {
   cidr_block = "10.0.0.0/16"
   enable_dns_hostnames = true
@@ -15,14 +16,16 @@ resource "aws_vpc" "csye6225_a4_vpc" {
   }
 }
 
+# Creating Internet Gateway and attaching it to VPC
 resource "aws_internet_gateway" "csye6225_a4_gateway" {
     vpc_id = "${aws_vpc.csye6225_a4_vpc.id}"
 }
 
+# Creating subnet1 in VPC
 resource "aws_subnet" "csye6225_subnet1" {
   cidr_block = "10.0.0.0/24"
   vpc_id = "${aws_vpc.csye6225_a4_vpc.id}"
-  availability_zone = "us-east-1a"
+  availability_zone = var.availability_zone1
   map_public_ip_on_launch = true
 
   tags = {
@@ -30,10 +33,11 @@ resource "aws_subnet" "csye6225_subnet1" {
   }
 }
 
+# Creating subnet2 in VPC
 resource "aws_subnet" "csye6225_subnet2" {
   cidr_block = "10.0.1.0/24"
   vpc_id = "${aws_vpc.csye6225_a4_vpc.id}"
-  availability_zone = "us-east-1b"
+  availability_zone = var.availability_zone2
   map_public_ip_on_launch = true
 
   tags = {
@@ -41,10 +45,11 @@ resource "aws_subnet" "csye6225_subnet2" {
   }
 }
 
+# Creating subnet3 in VPC
 resource "aws_subnet" "csye6225_subnet3" {
   cidr_block = "10.0.2.0/24"
   vpc_id = "${aws_vpc.csye6225_a4_vpc.id}"
-  availability_zone = "us-east-1c"
+  availability_zone = var.availability_zone3
   map_public_ip_on_launch = true
 
   tags = {
@@ -52,6 +57,7 @@ resource "aws_subnet" "csye6225_subnet3" {
   }
 }
 
+# Creating routing table
 resource "aws_route_table" "csye6225_a4_route_table" {
     vpc_id = "${aws_vpc.csye6225_a4_vpc.id}"
 
@@ -61,17 +67,371 @@ resource "aws_route_table" "csye6225_a4_route_table" {
     }
 }
 
+# Attaching subnet1 to route table
 resource "aws_route_table_association" "csye6225_route_table_subnet1" {
   subnet_id      = aws_subnet.csye6225_subnet1.id
   route_table_id = aws_route_table.csye6225_a4_route_table.id
 }
 
+# Attaching subnet2 to route table
 resource "aws_route_table_association" "csye6225_route_table_subnet2" {
   subnet_id      = aws_subnet.csye6225_subnet2.id
   route_table_id = aws_route_table.csye6225_a4_route_table.id
 }
 
+# Attaching subnet3 to route table
 resource "aws_route_table_association" "csye6225_route_table_subnet3" {
   subnet_id      = aws_subnet.csye6225_subnet3.id
   route_table_id = aws_route_table.csye6225_a4_route_table.id
+}
+
+# Declaring security group for application on ports 443,22,80,3000,8080
+resource "aws_security_group" "application" {
+  name        = "app_security_group"
+  description = "Allow TLS inbound traffic on ports 443,22,80,3000,8080"
+  vpc_id      = "${aws_vpc.csye6225_a4_vpc.id}"
+
+  ingress {
+    description = "TLS from VPC on port 443"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.csye6225_a4_vpc.cidr_block]
+  }
+
+  ingress {
+    description = "SSH"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "TLS from VPC on port 80"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.csye6225_a4_vpc.cidr_block]
+  }
+
+  ingress {
+    description = "NodeJS Server"
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.csye6225_a4_vpc.cidr_block]
+  }
+
+  ingress {
+    description = "HTTP-Tomcat"
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.csye6225_a4_vpc.cidr_block]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "app_security_group"
+  }
+}
+
+# Declaring security group for database on ports 3306
+resource "aws_security_group" "database" {
+  name        = "db_security_group"
+  description = "Allow TLS inbound traffic on port 3306"
+  vpc_id      = "${aws_vpc.csye6225_a4_vpc.id}"
+
+  ingress {
+    description = "TLS from VPC on port 3306"
+    security_groups =  ["${aws_security_group.application.id}"]
+    from_port   = 3306
+    to_port     = 3306
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.csye6225_a4_vpc.cidr_block]
+  }
+
+  tags = {
+    Name = "db_security_group"
+  }
+}
+
+# Creating private S3 bucket with default encryption & lifecycle policy
+resource "aws_s3_bucket" "webapp_bucket" {
+  bucket = "webapp.snehal.patel"
+  acl    = "private"
+  force_destroy = true
+
+  versioning {
+    enabled = true
+  }
+
+  server_side_encryption_configuration {
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = "${aws_kms_key.key_for_encryption.arn}"
+      sse_algorithm     = "aws:kms"
+    }
+  }
+}
+
+  lifecycle_rule {
+    enabled = true
+    transition {
+      days = 30
+      storage_class = "STANDARD_IA"
+    }
+  }
+
+  tags = {
+    Name = "webapp_bucket"
+  }
+}
+
+# Key to encrypt bucket objects
+resource "aws_kms_key" "key_for_encryption" {
+  description             = "Key to encrypt bucket objects"
+  deletion_window_in_days = 10
+}
+
+# Creating db_subnet_group
+resource "aws_db_subnet_group" "rds_subnet_group" {
+  name = var.subnet_group_name
+  subnet_ids = ["${aws_subnet.csye6225_subnet1.id}", "${aws_subnet.csye6225_subnet2.id}", "${aws_subnet.csye6225_subnet3.id}"]
+
+  tags = {
+    Name = "My RDS subnet group"
+  }
+}
+
+# Creating RDS instance
+resource "aws_db_instance" "rds_instance" {
+  allocated_storage    = 20
+  storage_type         = "gp2"
+  engine               = "mysql"
+  engine_version       = "5.7"
+  instance_class       = "db.t3.micro"
+  name                 = "csye6225"
+  username             = "csye6225"
+  password             = "Snehal100#"
+  parameter_group_name = "default.mysql5.7"
+  multi_az             = false
+  publicly_accessible  = false
+  identifier           = "csye6225-su2020"
+  vpc_security_group_ids = ["${aws_security_group.database.id}"]
+  db_subnet_group_name = aws_db_subnet_group.rds_subnet_group.name
+  skip_final_snapshot  = true
+}
+
+# Getting the AMI ID for custom AMI created
+data "aws_ami" "customAMI" {
+  executable_users = [262619488074, 417316329881]
+  most_recent      = true
+  name_regex       = "(^csye6225_)+"
+  owners           = ["self"]
+
+  filter {
+    name   = "name"
+    values = ["csye6225_*"]
+  }
+
+  filter {
+    name   = "root-device-type"
+    values = ["ebs"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+#Creating EC2 instance with custom AMI
+resource "aws_instance" "MyWebAppInstance" {
+  ami                  = "${data.aws_ami.customAMI.id}"
+  instance_type        = "t2.medium"
+  key_name             = var.key_pair_name
+  subnet_id            = "${aws_subnet.csye6225_subnet1.id}"
+  iam_instance_profile = "${aws_iam_instance_profile.EC2Profile.name}"
+  #availability_zone = var.availability_zone1
+
+  ebs_block_device {
+    device_name           = "/dev/sda1"
+    volume_type           = "gp2"
+    volume_size           = 20
+    delete_on_termination = true
+  }
+  vpc_security_group_ids = ["${aws_security_group.application.id}"]
+
+  tags = {
+    Name = "MyWebAppInstance"
+  }
+  /*Commenting out temporarily
+  connection {
+      host          = "${aws_instance.MyWebAppInstance.public_ip}"
+    type        = "ssh"
+    user        = "ubuntu"
+    agent       = false
+    private_key = "file(/home/snehal/.ssh/csye6225_su2020_keypair)"
+    timeout     = "10m"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "echo 'hi' >> test.txt",
+      "echo 'hi' >> /tmp/test.txt",
+    ]
+  }*/
+
+  /*provisioner "remote-exec" {
+        inline = [
+            //Executing command to creating a file on the instance
+            "echo 'Some data' > SomeData.txt",
+        ]
+
+        //Connection to be used by provisioner to perform remote executions
+        connection {
+            //Use public IP of the instance to connect to it.
+            host          = "${aws_instance.MyWebAppInstance.public_ip}"
+            type          = "ssh"
+            user          = "ec2-user"
+            private_key   = "${file("<<pem_file>>")}"
+            timeout       = "1m"
+            agent         = false
+        }
+    }*/
+}
+
+#Creating EBS Volume
+/*resource "aws_ebs_volume" "MyWebAppInstanceEBS" {
+  availability_zone = var.availability_zone1
+  size              = 20
+  type              = "gp2"
+
+  tags = {
+    Name = "MyWebAppInstanceEBS"
+  }
+}
+
+#Attaching the EBS Volume to EC2 instance
+resource "aws_volume_attachment" "ebs_attach" {
+  device_name  = "/dev/sda1"
+  skip_destroy = false
+  volume_id    = "${aws_ebs_volume.MyWebAppInstanceEBS.id}"
+  instance_id  = "${aws_instance.MyWebAppInstance.id}"
+}*/
+
+#Create DynamoDB Table
+/*module "dynamodb_table" {
+  source   = "terraform-aws-modules/dynamodb-table/aws"
+
+  name     = "csye6225"
+  hash_key = "id"
+
+  attributes = [
+    {
+      name = "id"
+      type = "S"
+    }
+  ]
+
+  tags = {
+    Terraform   = "true"
+    Environment = "staging"
+  }
+}*/
+
+#Create DynamoDB Table
+resource "aws_dynamodb_table" "csye6225-dynamodb-table" {
+  name           = "csye6225"
+  billing_mode   = "PROVISIONED"
+  read_capacity  = 20
+  write_capacity = 20
+  hash_key       = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "TimeToExist"
+    enabled        = false
+  }
+
+  tags = {
+    Name = "csye6225-dynamodb-table"
+  }
+}
+
+#Create EC2-CSYE6225 role
+resource "aws_iam_role" "EC2-CSYE6225" {
+  name = "EC2-CSYE6225"
+
+  assume_role_policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": "sts:AssumeRole",
+      "Principal": {
+        "Service": "ec2.amazonaws.com"
+      },
+      "Effect": "Allow",
+      "Sid": ""
+    }
+  ]
+}
+EOF
+
+  tags = {
+    tag-key = "tag-value"
+  }
+}
+
+#Creating EC2 instance profile
+resource "aws_iam_instance_profile" "EC2Profile" {
+  name = "EC2Profile"
+  role = "${aws_iam_role.EC2-CSYE6225.name}"
+}
+
+#Create WebAppS3 Policy and attching it to role EC2-CSYE6225
+resource "aws_iam_role_policy" "WebAppS3" {
+  name        = "WebAppS3"
+  role        = "${aws_iam_role.EC2-CSYE6225.id}"
+
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement":  [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:ListBucket"
+            ],
+            "Resource": [
+                "arn:aws:s3:::webapp.snehal.patel"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:DeleteObject"
+            ],
+            "Resource": [
+                "arn:aws:s3:::webapp.snehal.patel/*"
+            ]
+        }
+    ]
+}
+EOF
 }
