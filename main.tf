@@ -11,8 +11,7 @@ resource "aws_vpc" "csye6225_a4_vpc" {
   assign_generated_ipv6_cidr_block = false
 
   tags = {
-    Name = "csye6225_a4_vpc",
-    Tag2 = "new tag"
+    Name = "csye6225_a4_vpc"
   }
 }
 
@@ -96,7 +95,7 @@ resource "aws_security_group" "application" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = [aws_vpc.csye6225_a4_vpc.cidr_block]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
@@ -112,7 +111,7 @@ resource "aws_security_group" "application" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = [aws_vpc.csye6225_a4_vpc.cidr_block]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
@@ -120,7 +119,7 @@ resource "aws_security_group" "application" {
     from_port   = 3000
     to_port     = 3000
     protocol    = "tcp"
-    cidr_blocks = [aws_vpc.csye6225_a4_vpc.cidr_block]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
@@ -128,7 +127,7 @@ resource "aws_security_group" "application" {
     from_port   = 8080
     to_port     = 8080
     protocol    = "tcp"
-    cidr_blocks = [aws_vpc.csye6225_a4_vpc.cidr_block]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -220,7 +219,7 @@ resource "aws_db_instance" "rds_instance" {
   instance_class       = "db.t3.micro"
   name                 = "csye6225"
   username             = "csye6225"
-  password             = "Snehal100#"
+  password             = "Password123"
   parameter_group_name = "default.mysql5.7"
   multi_az             = false
   publicly_accessible  = false
@@ -230,36 +229,26 @@ resource "aws_db_instance" "rds_instance" {
   skip_final_snapshot  = true
 }
 
-# Getting the AMI ID for custom AMI created
-data "aws_ami" "customAMI" {
-  executable_users = [262619488074, 417316329881]
-  most_recent      = true
-  name_regex       = "(^csye6225_)+"
-  owners           = ["self"]
-
-  filter {
-    name   = "name"
-    values = ["csye6225_*"]
-  }
-
-  filter {
-    name   = "root-device-type"
-    values = ["ebs"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
+# Initializing userData
+data "template_file" "init" {
+  template = "${file("./userData.sh")}"
+  vars = {
+    rds_endpoint  = "${aws_db_instance.rds_instance.address}"
+    access_key_id = var.key_id
+    secret_key    = var.secret
+    s3_endpoint   = "${var.s3_endpoint_prefix}.${var.region}.${var.s3_endpoint_postfix}"
+    region        = var.region
   }
 }
 
 #Creating EC2 instance with custom AMI
 resource "aws_instance" "MyWebAppInstance" {
-  ami                  = "${data.aws_ami.customAMI.id}"
+  ami                  = var.amiId
   instance_type        = "t2.medium"
   key_name             = var.key_pair_name
   subnet_id            = "${aws_subnet.csye6225_subnet1.id}"
   iam_instance_profile = "${aws_iam_instance_profile.EC2Profile.name}"
+  user_data            = "${data.template_file.init.rendered}"
   #availability_zone = var.availability_zone1
 
   ebs_block_device {
@@ -273,80 +262,7 @@ resource "aws_instance" "MyWebAppInstance" {
   tags = {
     Name = "MyWebAppInstance"
   }
-  /*Commenting out temporarily
-  connection {
-      host          = "${aws_instance.MyWebAppInstance.public_ip}"
-    type        = "ssh"
-    user        = "ubuntu"
-    agent       = false
-    private_key = "file(/home/snehal/.ssh/csye6225_su2020_keypair)"
-    timeout     = "10m"
-  }
-
-  provisioner "remote-exec" {
-    inline = [
-      "echo 'hi' >> test.txt",
-      "echo 'hi' >> /tmp/test.txt",
-    ]
-  }*/
-
-  /*provisioner "remote-exec" {
-        inline = [
-            //Executing command to creating a file on the instance
-            "echo 'Some data' > SomeData.txt",
-        ]
-
-        //Connection to be used by provisioner to perform remote executions
-        connection {
-            //Use public IP of the instance to connect to it.
-            host          = "${aws_instance.MyWebAppInstance.public_ip}"
-            type          = "ssh"
-            user          = "ec2-user"
-            private_key   = "${file("<<pem_file>>")}"
-            timeout       = "1m"
-            agent         = false
-        }
-    }*/
 }
-
-#Creating EBS Volume
-/*resource "aws_ebs_volume" "MyWebAppInstanceEBS" {
-  availability_zone = var.availability_zone1
-  size              = 20
-  type              = "gp2"
-
-  tags = {
-    Name = "MyWebAppInstanceEBS"
-  }
-}
-
-#Attaching the EBS Volume to EC2 instance
-resource "aws_volume_attachment" "ebs_attach" {
-  device_name  = "/dev/sda1"
-  skip_destroy = false
-  volume_id    = "${aws_ebs_volume.MyWebAppInstanceEBS.id}"
-  instance_id  = "${aws_instance.MyWebAppInstance.id}"
-}*/
-
-#Create DynamoDB Table
-/*module "dynamodb_table" {
-  source   = "terraform-aws-modules/dynamodb-table/aws"
-
-  name     = "csye6225"
-  hash_key = "id"
-
-  attributes = [
-    {
-      name = "id"
-      type = "S"
-    }
-  ]
-
-  tags = {
-    Terraform   = "true"
-    Environment = "staging"
-  }
-}*/
 
 #Create DynamoDB Table
 resource "aws_dynamodb_table" "csye6225-dynamodb-table" {
