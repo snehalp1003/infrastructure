@@ -287,67 +287,58 @@ resource "aws_dynamodb_table" "csye6225-dynamodb-table" {
   }
 }
 
-#Create EC2-CSYE6225 role
-resource "aws_iam_role" "EC2-CSYE6225" {
-  name = "EC2-CSYE6225"
-
-  assume_role_policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Action": "sts:AssumeRole",
-      "Principal": {
-        "Service": "ec2.amazonaws.com"
-      },
-      "Effect": "Allow",
-      "Sid": ""
-    }
-  ]
+#Creating CodeDeploy Application Resource for Webapp
+resource "aws_codedeploy_app" "csye6225-webapp" {
+  name = "csye6225-webapp"
+  compute_platform = "Server"
 }
-EOF
 
-  tags = {
-    tag-key = "tag-value"
+#Creating CodeDeploy Deployment Group Resource for Webapp
+resource "aws_codedeploy_deployment_group" "csye6225-webapp-deployment" {
+  app_name = aws_codedeploy_app.csye6225-webapp.name
+  deployment_group_name = "csye6225-webapp-deployment"
+  service_role_arn = aws_iam_role.CodeDeployServiceRole.arn
+  auto_rollback_configuration {
+    enabled = true
+    events = ["DEPLOYMENT_FAILURE"]
+  }
+  deployment_config_name = "CodeDeployDefault.AllAtOnce"
+  deployment_style {
+    deployment_option = "WITHOUT_TRAFFIC_CONTROL"
+    deployment_type = "IN_PLACE"
+  }
+
+  ec2_tag_filter {
+    type = "KEY_AND_VALUE"
+    key = "Name"
+    value = "MyWebAppInstance"
   }
 }
 
-#Creating EC2 instance profile
-resource "aws_iam_instance_profile" "EC2Profile" {
-  name = "EC2Profile"
-  role = "${aws_iam_role.EC2-CSYE6225.name}"
+#Creating CodeDeploy Application Resource for Webapp-UI
+resource "aws_codedeploy_app" "csye6225-webapp-ui" {
+  name = "csye6225-webapp-ui"
+  compute_platform = "Server"
 }
 
-#Create WebAppS3 Policy and attching it to role EC2-CSYE6225
-resource "aws_iam_role_policy" "WebAppS3" {
-  name        = "WebAppS3"
-  role        = "${aws_iam_role.EC2-CSYE6225.id}"
+#Creating CodeDeploy Deployment Group Resource for Webapp-UI
+resource "aws_codedeploy_deployment_group" "csye6225-webapp-ui-deployment" {
+  app_name = aws_codedeploy_app.csye6225-webapp-ui.name
+  deployment_group_name = "csye6225-webapp-ui-deployment"
+  service_role_arn = aws_iam_role.CodeDeployServiceRole.arn
+  auto_rollback_configuration {
+    enabled = true
+    events = ["DEPLOYMENT_FAILURE"]
+  }
+  deployment_config_name = "CodeDeployDefault.AllAtOnce"
+  deployment_style {
+    deployment_option = "WITHOUT_TRAFFIC_CONTROL"
+    deployment_type = "IN_PLACE"
+  }
 
-  policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement":  [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "s3:ListBucket"
-            ],
-            "Resource": [
-                "arn:aws:s3:::webapp.snehal.patel"
-            ]
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
-                "s3:PutObject",
-                "s3:GetObject",
-                "s3:DeleteObject"
-            ],
-            "Resource": [
-                "arn:aws:s3:::webapp.snehal.patel/*"
-            ]
-        }
-    ]
-}
-EOF
+  ec2_tag_filter {
+    type = "KEY_AND_VALUE"
+    key = "Name"
+    value = "MyWebAppInstance"
+  }
 }
