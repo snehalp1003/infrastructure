@@ -41,5 +41,5 @@ variable "s3_endpoint_postfix" {
 }
 
 variable "amiId" {
-    #default = ""
+    #default = "ami-0e7d442c3569600b9"
 }
