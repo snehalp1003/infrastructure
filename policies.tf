@@ -82,7 +82,10 @@ resource "aws_iam_policy" "CodeDeploy-EC2-S3" {
             "Action": [
                 "s3:*"
             ],
-            "Resource": "*"
+            "Resource": [
+                "arn:aws:s3:::codedeploy.snehalpatel.me",
+                "arn:aws:s3:::codedeploy.snehalpatel.me/*"
+            ]
         }
     ]
 }
@@ -92,6 +95,12 @@ EOF
 #Attaching CodeDeploy-EC2-S3 policy to EC2ServiceRole role
 resource "aws_iam_role_policy_attachment" "CodeDeploy-EC2-S3_EC2ServiceRole_attach" {
   policy_arn = "${aws_iam_policy.CodeDeploy-EC2-S3.arn}"
+  role = "${aws_iam_role.EC2ServiceRole.name}"
+}
+
+#Attaching CloudWatchAgentServerPolicy policy to EC2ServiceRole role
+resource "aws_iam_role_policy_attachment" "CloudWatchAgentServerPolicy_attach" {
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
   role = "${aws_iam_role.EC2ServiceRole.name}"
 }
 
