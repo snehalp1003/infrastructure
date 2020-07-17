@@ -84,27 +84,11 @@ resource "aws_route_table_association" "csye6225_route_table_subnet3" {
   route_table_id = aws_route_table.csye6225_route_table.id
 }
 
-# Declaring security group for application on ports 443,22,80,3000,8080
-resource "aws_security_group" "application" {
-  name        = "app_security_group"
-  description = "Allow TLS inbound traffic on ports 443,22,80,3000,8080"
+# Declaring security group for alb on ports 80, 443
+resource "aws_security_group" "alb" {
+  name        = "alb_security_group"
+  description = "Allow TLS inbound traffic on port 80, 443"
   vpc_id      = "${aws_vpc.csye6225_vpc.id}"
-
-  ingress {
-    description = "TLS from VPC on port 443"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
 
   ingress {
     description = "TLS from VPC on port 80"
@@ -115,11 +99,45 @@ resource "aws_security_group" "application" {
   }
 
   ingress {
+    description = "TLS from VPC on port 443"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "alb_security_group"
+  }
+}
+
+# Declaring security group for application on ports 22,3000,8080
+resource "aws_security_group" "application" {
+  name        = "app_security_group"
+  description = "Allow TLS inbound traffic on ports 22,3000,8080"
+  vpc_id      = "${aws_vpc.csye6225_vpc.id}"
+
+  ingress {
+    description = "SSH"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
     description = "NodeJS Server"
+    security_groups =  ["${aws_security_group.alb.id}"]
     from_port   = 3000
     to_port     = 3000
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
@@ -240,26 +258,100 @@ data "template_file" "init" {
   }
 }
 
-#Creating EC2 instance with custom AMI
-resource "aws_instance" "MyWebAppInstance" {
-  ami                  = var.amiId
-  instance_type        = "t2.medium"
-  key_name             = var.key_pair_name
-  subnet_id            = "${aws_subnet.csye6225_subnet1.id}"
-  iam_instance_profile = "${aws_iam_instance_profile.EC2Profile.name}"
-  user_data            = "${data.template_file.init.rendered}"
-  #availability_zone = var.availability_zone1
+#Defining Launch Configuration for autoscaling
+resource "aws_launch_configuration" "asg_launch_config" {
+  name                        = "asg_launch_config"
+  image_id                    = var.amiId
+  instance_type               = "t2.medium"
+  key_name                    = var.key_pair_name
+  associate_public_ip_address = true
+  user_data                   = "${data.template_file.init.rendered}"
+  iam_instance_profile        = "${aws_iam_instance_profile.EC2Profile.name}"
+  security_groups             = ["${aws_security_group.application.id}"]
 
-  ebs_block_device {
-    device_name           = "/dev/sda1"
+  root_block_device {
     volume_type           = "gp2"
     volume_size           = 20
     delete_on_termination = true
   }
-  vpc_security_group_ids = ["${aws_security_group.application.id}"]
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+#Defining autoscaling group
+resource "aws_autoscaling_group" "app_autoscaling_group" {
+  name                 = "app_autoscaling_group"
+  vpc_zone_identifier  = ["${aws_subnet.csye6225_subnet1.id}", "${aws_subnet.csye6225_subnet2.id}", "${aws_subnet.csye6225_subnet3.id}"]
+  default_cooldown     = 60
+  launch_configuration = "${aws_launch_configuration.asg_launch_config.name}"
+  min_size             = 2
+  max_size             = 5
+  desired_capacity     = 2
+  target_group_arns    = ["${aws_lb_target_group.lb_target_port.arn}"]
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tag {
+      key                 = "Name"
+      value               = "MyWebAppInstance"
+      propagate_at_launch = true
+  }
+}
+
+#Defining application load balancer
+resource "aws_lb" "app_load_balancer" {
+  name               = "app-load-balancer"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = ["${aws_security_group.alb.id}"]
+  subnets            = ["${aws_subnet.csye6225_subnet1.id}", "${aws_subnet.csye6225_subnet2.id}", "${aws_subnet.csye6225_subnet3.id}"]
+
+  enable_deletion_protection = false
 
   tags = {
-    Name = "MyWebAppInstance"
+    Name = "app_load_balancer"
+  }
+}
+
+resource "aws_lb_listener" "app_lb_listener" {
+  load_balancer_arn = "${aws_lb.app_load_balancer.arn}"
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type = "forward"
+    target_group_arn = "${aws_lb_target_group.lb_target_port.arn}"
+  }
+}
+
+#Defining port for load balancer to accept traffic for instances
+resource "aws_lb_target_group" "lb_target_port" {
+  name        = "lb-target-port"
+  port        = 3000
+  protocol    = "HTTP"
+  target_type = "instance"
+  vpc_id      = "${aws_vpc.csye6225_vpc.id}"
+}
+
+#Creating resource aws_route53_zone to import and map hosted zone locally
+resource "aws_route53_zone" "primary" {
+    name = "prod.snehalpatel.me."
+}
+
+#Creating alias record for load balancer
+resource "aws_route53_record" "alias_route53_record" {
+  zone_id = "${aws_route53_zone.primary.zone_id}"
+  name    = var.recordName
+  type    = "A"
+
+  alias {
+    name                   = "${aws_lb.app_load_balancer.dns_name}"
+    zone_id                = "${aws_lb.app_load_balancer.zone_id}"
+    evaluate_target_health = true
   }
 }
 
@@ -297,6 +389,7 @@ resource "aws_codedeploy_deployment_group" "csye6225-webapp-deployment" {
   app_name = aws_codedeploy_app.csye6225-webapp.name
   deployment_group_name = "csye6225-webapp-deployment"
   service_role_arn = aws_iam_role.CodeDeployServiceRole.arn
+  autoscaling_groups = ["${aws_autoscaling_group.app_autoscaling_group.name}"]
   auto_rollback_configuration {
     enabled = true
     events = ["DEPLOYMENT_FAILURE"]
@@ -325,6 +418,7 @@ resource "aws_codedeploy_deployment_group" "csye6225-webapp-ui-deployment" {
   app_name = aws_codedeploy_app.csye6225-webapp-ui.name
   deployment_group_name = "csye6225-webapp-ui-deployment"
   service_role_arn = aws_iam_role.CodeDeployServiceRole.arn
+  autoscaling_groups = ["${aws_autoscaling_group.app_autoscaling_group.name}"]
   auto_rollback_configuration {
     enabled = true
     events = ["DEPLOYMENT_FAILURE"]

@@ -41,5 +41,9 @@ variable "s3_endpoint_postfix" {
 }
 
 variable "amiId" {
-    #default = "ami-0e7d442c3569600b9"
+    #default = "ami-09a35531ae08a02d9"
+}
+
+variable "recordName" {
+    default = "prod.snehalpatel.me."
 }
