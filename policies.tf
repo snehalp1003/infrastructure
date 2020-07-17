@@ -272,3 +272,60 @@ resource "aws_iam_role_policy_attachment" "CodeDeployServiceRole_attach" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
   role = "${aws_iam_role.CodeDeployServiceRole.name}"
 }
+
+###################################################################################################
+#This section defines the policies for autoscaling and their respective cloudwatch metric alarms
+
+#This is scale up policy
+resource "aws_autoscaling_policy" "WebServerScaleUpPolicy" {
+  name                   = "WebServerScaleUpPolicy"
+  scaling_adjustment     = 1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 60
+  autoscaling_group_name = "${aws_autoscaling_group.app_autoscaling_group.name}"
+}
+
+#This is scale down policy
+resource "aws_autoscaling_policy" "WebServerScaleDownPolicy" {
+  name                   = "WebServerScaleDownPolicy"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 60
+  autoscaling_group_name = "${aws_autoscaling_group.app_autoscaling_group.name}"
+}
+
+#This metric alarm will trigger scale up policy
+resource "aws_cloudwatch_metric_alarm" "CPUAlarmHigh" {
+  alarm_name             = "CPUAlarmHigh"
+  alarm_description      = "Scale-up if CPU > 90% for 1 minute"
+  comparison_operator    = "GreaterThanThreshold"
+  metric_name            = "CPUUtilization"
+  namespace              = "AWS/EC2"
+  statistic              = "Average"
+  period                 = "300"
+  evaluation_periods     = "1"
+  threshold              = "90"
+
+  dimensions = {
+    AutoScalingGroupName = "${aws_autoscaling_group.app_autoscaling_group.name}"
+  }
+  alarm_actions          = ["${aws_autoscaling_policy.WebServerScaleUpPolicy.arn}"]
+}
+
+#This metric alarm will trigger scale down policy
+resource "aws_cloudwatch_metric_alarm" "CPUAlarmLow" {
+  alarm_name             = "CPUAlarmLow"
+  alarm_description      = "Scale-down if CPU < 3% for 1 minute"
+  comparison_operator    = "LessThanThreshold"
+  metric_name            = "CPUUtilization"
+  namespace              = "AWS/EC2"
+  statistic              = "Average"
+  period                 = "300"
+  evaluation_periods     = "1"
+  threshold              = "3"
+
+  dimensions = {
+    AutoScalingGroupName = "${aws_autoscaling_group.app_autoscaling_group.name}"
+  }
+  alarm_actions          = ["${aws_autoscaling_policy.WebServerScaleDownPolicy.arn}"]
+}
