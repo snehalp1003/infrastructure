@@ -297,14 +297,14 @@ resource "aws_autoscaling_policy" "WebServerScaleDownPolicy" {
 #This metric alarm will trigger scale up policy
 resource "aws_cloudwatch_metric_alarm" "CPUAlarmHigh" {
   alarm_name             = "CPUAlarmHigh"
-  alarm_description      = "Scale-up if CPU > 5% for 1 minute"
+  alarm_description      = "Scale-up if CPU > 90% for 1 minute"
   comparison_operator    = "GreaterThanThreshold"
   metric_name            = "CPUUtilization"
   namespace              = "AWS/EC2"
   statistic              = "Average"
   period                 = "300"
   evaluation_periods     = "1"
-  threshold              = "5"
+  threshold              = "90"
 
   dimensions = {
     AutoScalingGroupName = "${aws_autoscaling_group.app_autoscaling_group.name}"
