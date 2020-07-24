@@ -47,3 +47,11 @@ variable "amiId" {
 variable "recordName" {
     default = "prod.snehalpatel.me."
 }
+
+variable "fromEmailAddress" {
+    default = "donotreply@prod.snehalpatel.me"
+}
+
+variable "topic_arn" {
+    default = "arn:aws:sns:us-east-1:262619488074:ForgotPasswordTopic"
+}

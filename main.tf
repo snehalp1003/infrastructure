@@ -250,11 +250,13 @@ resource "aws_db_instance" "rds_instance" {
 data "template_file" "init" {
   template = "${file("./userData.sh")}"
   vars = {
-    rds_endpoint  = "${aws_db_instance.rds_instance.address}"
-    access_key_id = var.key_id
-    secret_key    = var.secret
-    s3_endpoint   = "${var.s3_endpoint_prefix}.${var.region}.${var.s3_endpoint_postfix}"
-    region        = var.region
+    rds_endpoint   = "${aws_db_instance.rds_instance.address}"
+    access_key_id  = var.key_id
+    secret_key     = var.secret
+    s3_endpoint    = "${var.s3_endpoint_prefix}.${var.region}.${var.s3_endpoint_postfix}"
+    region         = var.region
+    topicArn       = var.topic_arn
+    domainName     = var.recordName
   }
 }
 
@@ -339,7 +341,7 @@ resource "aws_lb_target_group" "lb_target_port" {
 
 #Creating resource aws_route53_zone to import and map hosted zone locally
 resource "aws_route53_zone" "primary" {
-    name = "prod.snehalpatel.me."
+    name = var.recordName
 }
 
 #Creating alias record for load balancer
@@ -369,8 +371,8 @@ resource "aws_dynamodb_table" "csye6225-dynamodb-table" {
   }
 
   ttl {
-    attribute_name = "TimeToExist"
-    enabled        = false
+    attribute_name = "TTL"
+    enabled        = true
   }
 
   tags = {
@@ -434,4 +436,49 @@ resource "aws_codedeploy_deployment_group" "csye6225-webapp-ui-deployment" {
     key = "Name"
     value = "MyWebAppInstance"
   }
+}
+
+#Creating SNS Topic
+resource "aws_sns_topic" "sns_topic" {
+  name = "ForgotPasswordTopic"
+}
+
+#Defining Lambda Function
+resource "aws_lambda_function" "lambda_function_sendemail" {
+  filename         = "/home/snehal/faas-0.0.1-SNAPSHOT.jar"
+  function_name    = "SendEmailOnSNS"
+  role             = "${aws_iam_role.LambdaFunctionRole.arn}"
+  handler          = "com.csye6225.faas.events.SendEmailEvent::handleRequest"
+  runtime          = "java8"
+  memory_size      = 512
+  timeout          = 120
+
+
+  environment {
+    variables = {
+      fromEmailAddress = var.fromEmailAddress
+    }
+  }
+}
+
+resource "aws_lambda_permission" "allow_cloudwatch" {
+  action        = "lambda:*"
+  function_name = "${aws_lambda_function.lambda_function_sendemail.function_name}"
+  principal     = "sns.amazonaws.com"
+  source_arn    = "arn:aws:sns:us-east-1:262619488074:ForgotPasswordTopic"
+}
+
+#Creating SQS Queue
+resource "aws_sqs_queue" "sqs_queue" {
+  name = "ForgotPasswordQueue"
+  tags = {
+    Name = "ForgotPasswordQueue"
+  }
+}
+
+#Creating the topic subscription
+resource "aws_sns_topic_subscription" "sns_topic_subscription" {
+  topic_arn = aws_sns_topic.sns_topic.arn
+  protocol  = "lambda"
+  endpoint  = aws_lambda_function.lambda_function_sendemail.arn
 }
