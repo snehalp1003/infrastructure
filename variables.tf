@@ -15,7 +15,7 @@ variable "availability_zone3" {
 }
 
 variable "subnet_group_name" {
-    #default = "rds_group"
+    #default = "group"
 }
 
 variable "key_pair_name" {
@@ -41,11 +41,15 @@ variable "s3_endpoint_postfix" {
 }
 
 variable "amiId" {
-    #default = "ami-09a35531ae08a02d9"
+    #default = "ami-00e7cc19eb3e556cd"
 }
 
 variable "recordName" {
     default = "prod.snehalpatel.me."
+}
+
+variable "domainName" {
+    default = "prod.snehalpatel.me"
 }
 
 variable "fromEmailAddress" {
