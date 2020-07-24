@@ -125,14 +125,6 @@ resource "aws_security_group" "application" {
   vpc_id      = "${aws_vpc.csye6225_vpc.id}"
 
   ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
     description = "NodeJS Server"
     security_groups =  ["${aws_security_group.alb.id}"]
     from_port   = 3000
@@ -142,10 +134,10 @@ resource "aws_security_group" "application" {
 
   ingress {
     description = "HTTP-Tomcat"
+    security_groups =  ["${aws_security_group.alb.id}"]
     from_port   = 8080
     to_port     = 8080
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -256,7 +248,7 @@ data "template_file" "init" {
     s3_endpoint    = "${var.s3_endpoint_prefix}.${var.region}.${var.s3_endpoint_postfix}"
     region         = var.region
     topicArn       = var.topic_arn
-    domainName     = var.recordName
+    domainName     = var.domainName
   }
 }
 
