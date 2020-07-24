@@ -8,3 +8,6 @@ echo "BUCKET_NAME=webapp.snehal.patel" >> /etc/environment
 echo "BUCKET_URL=${s3_endpoint}" >> /etc/environment
 echo "AWS_REGION=${region}" >> /etc/environment
 echo "CODE_DEPLOY_S3_BUCKET"="codedeploy.snehalpatel.me" >> /etc/environment
+echo "DOMAIN_NAME=${domainName}" >> /etc/environment
+echo "TOPIC_ARN=${topicArn}" >> /etc/environment
+echo "QUEUE=ForgotPasswordQueue" >> /etc/environment

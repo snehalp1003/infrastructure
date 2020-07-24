@@ -329,3 +329,75 @@ resource "aws_cloudwatch_metric_alarm" "CPUAlarmLow" {
   }
   alarm_actions          = ["${aws_autoscaling_policy.WebServerScaleDownPolicy.arn}"]
 }
+
+###################################################################################################
+
+#Creating IAM Role for Lambda Functions
+resource "aws_iam_role" "LambdaFunctionRole" {
+  name = "LambdaFunctionRole"
+  assume_role_policy = data.aws_iam_policy_document.lambda-assume-role-policy.json
+}
+
+#Creating policy document for Lambda Functions
+data "aws_iam_policy_document" "lambda-assume-role-policy" {
+ statement {
+   actions = ["sts:AssumeRole"]
+
+   principals {
+     type        = "Service"
+     identifiers = ["lambda.amazonaws.com"]
+   }
+ }
+}
+
+#Attaching AmazonDynamoDBFullAccess policy to LambdaFunctionRole
+resource "aws_iam_role_policy_attachment" "LambdaFunctionRole_attach1" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+  role = "${aws_iam_role.LambdaFunctionRole.name}"
+}
+#Attaching AmazonS3FullAccess policy to LambdaFunctionRole
+resource "aws_iam_role_policy_attachment" "LambdaFunctionRole_attach2" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+  role = "${aws_iam_role.LambdaFunctionRole.name}"
+}
+#Attaching AmazonSESFullAccess policy to LambdaFunctionRole
+resource "aws_iam_role_policy_attachment" "LambdaFunctionRole_attach3" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSESFullAccess"
+  role = "${aws_iam_role.LambdaFunctionRole.name}"
+}
+#Attaching AmazonSNSFullAccess policy to LambdaFunctionRole
+resource "aws_iam_role_policy_attachment" "LambdaFunctionRole_attach4" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSNSFullAccess"
+  role = "${aws_iam_role.LambdaFunctionRole.name}"
+}
+#Attaching AWSLambdaBasicExecutionRole policy to LambdaFunctionRole
+resource "aws_iam_role_policy_attachment" "LambdaFunctionRole_attach5" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  role = "${aws_iam_role.LambdaFunctionRole.name}"
+}
+
+#Create CircleCI-Update-Lambda Policy
+#This policy allows CircleCI to call Lambda APIs to update the Lambda function.
+resource "aws_iam_policy" "CircleCI-Update-Lambda" {
+  name        = "CircleCI-Update-Lambda"
+
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement":  [
+        {
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": "lambda:UpdateFunctionCode",
+            "Resource": "arn:aws:lambda:us-east-1:262619488074:function:SendEmailOnSNS"
+        }
+    ]
+}
+EOF
+}
+
+#Attaching CircleCI-Update-Lambda policy to cicd user
+resource "aws_iam_user_policy_attachment" "CircleCI-Update-Lambda_cicd_attach" {
+  user       = "${aws_iam_user.cicd.name}"
+  policy_arn = "${aws_iam_policy.CircleCI-Update-Lambda.arn}"
+}
