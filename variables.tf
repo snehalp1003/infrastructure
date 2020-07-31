@@ -41,11 +41,11 @@ variable "s3_endpoint_postfix" {
 }
 
 variable "amiId" {
-    #default = "ami-00e7cc19eb3e556cd"
+    #default = "ami-066ae903feba20a4f"
 }
 
 variable "recordName" {
-    default = "prod.snehalpatel.me."
+    default = "prod.snehalpatel.me"
 }
 
 variable "domainName" {
@@ -58,4 +58,8 @@ variable "fromEmailAddress" {
 
 variable "topic_arn" {
     default = "arn:aws:sns:us-east-1:262619488074:ForgotPasswordTopic"
+}
+
+variable "cert_arn" {
+    default = "arn:aws:acm:us-east-1:262619488074:certificate/e2fc621c-323c-482d-93c6-62493a3a17f9"
 }

@@ -121,7 +121,7 @@ resource "aws_security_group" "alb" {
 # Declaring security group for application on ports 22,3000,8080
 resource "aws_security_group" "application" {
   name        = "app_security_group"
-  description = "Allow TLS inbound traffic on ports 22,3000,8080"
+  description = "Allow TLS inbound traffic on ports 3000,8080"
   vpc_id      = "${aws_vpc.csye6225_vpc.id}"
 
   ingress {
@@ -229,13 +229,25 @@ resource "aws_db_instance" "rds_instance" {
   name                 = "csye6225"
   username             = "csye6225"
   password             = "Password123"
-  parameter_group_name = "default.mysql5.7"
+  parameter_group_name = "${aws_db_parameter_group.param-group-rds.name}"
   multi_az             = false
   publicly_accessible  = false
   identifier           = "csye6225-su2020"
   vpc_security_group_ids = ["${aws_security_group.database.id}"]
   db_subnet_group_name = aws_db_subnet_group.rds_subnet_group.name
   skip_final_snapshot  = true
+  storage_encrypted    = true
+}
+
+resource "aws_db_parameter_group" "param-group-rds" {
+  name   = "param-group-rds"
+  family = "mysql5.7"
+
+  parameter {
+    name  = "performance_schema"
+    value = "1"
+    apply_method = "pending-reboot"
+  }
 }
 
 # Initializing userData
@@ -313,8 +325,10 @@ resource "aws_lb" "app_load_balancer" {
 
 resource "aws_lb_listener" "app_lb_listener" {
   load_balancer_arn = "${aws_lb.app_load_balancer.arn}"
-  port              = "80"
-  protocol          = "HTTP"
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn   = var.cert_arn
 
   default_action {
     type = "forward"
