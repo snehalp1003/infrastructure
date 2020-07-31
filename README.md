@@ -13,3 +13,7 @@ To create a new network with the same template, run:
 
 1) terraform workspace new <workspace_name>
 2) terraform apply
+
+To import your certificates to the AWS resource stack, run the below command:
+
+ aws acm import-certificate --certificate file://Certificate.pem --certificate-chain file://CertificateChain.pem --private-key file://PrivateKey.pem
