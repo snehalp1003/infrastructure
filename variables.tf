@@ -23,13 +23,11 @@ variable "key_pair_name" {
 }
 
 variable "key_id" {
-    #default = "AKIAILFUTXMSFJEUERVQ"
-    #default = "AKIAIGJDIIDOLZX56DJQ"
+    #default = "Enter your key"
 }
 
 variable "secret" {
-    #default = "JEyKU7sqoEJlTc2v+8kGeRgggmTsgeI+QgEfg+Gg"
-    #default = "lxXw3FGZBLHrUw5o/hbED0jixnBYDdE+wx1gyjWM"
+    #default = "Enter your secret"
 }
 
 variable "s3_endpoint_prefix" {
